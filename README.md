@@ -1,37 +1,33 @@
 # IndellientREADme
 ## K8s manifest file, Dockerfile and Jenkins pipeline-as-code for a sample spring-book application deployment with mongoDB.
-
+# ConfigMap for ecommerceapp
 apiVersion: v1
 kind: ConfigMap
-metadata: 
-  name: springappconfigmap
-data: 
-  mongousername: admin
-  mongopassword: admin123
+metadata:
+  name: ecommerceconfigmap
+data:
+  mongousername: devdb
+  mongopassword: devdb@123
+
 ---
+# Deployment for mongoDB app
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: springappdeployment
+  name: ecommercedeployment
 spec:
   replicas: 2
-  strategy: 
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 2
-      maxSurge: 1
-  minReadySeconds: 30
   selector:
     matchLabels:
-      app: springapp
+      app: ecommerceapp
   template:
     metadata:
-      name: springapppod
+      name: ecommercepod
       labels:
-        app: springapp
+        app: ecommerceapp
     spec:
       containers:
-      - name: springappcontainer # This springappcontainer writes on the mongoDB container using the service springappsvc
+      - name: ecommercecontainer
         image: kalaski/spring-boot-mongo
         ports:
         - containerPort: 8080
@@ -39,29 +35,21 @@ spec:
         - name: MONGO_DB_USERNAME
           valueFrom:
             configMapKeyRef:
-              name: springappconfigmap 
+              name: ecommerceconfigmap
               key: mongousername
-        - name: MONGO_DB_HOSTNAME
+        - name: MONGO_DB_PASSWORD
           valueFrom:
-            configMapKeyRef: 
-              name: springappconfigmap 
+            configMapKeyRef:
+              name: ecommerceconfigmap
               key: mongopassword
-        resources: 
-          requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 1Gi
-            
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: springappsvc
+  name: ecommerceappsvc
 spec:
   selector:
-    app: springapp
+    app: ecommerceapp
   ports:
   - port: 80
     targetPort: 8080
@@ -70,7 +58,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mongodbpvc 
+  name: mongodbpvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -95,7 +83,7 @@ spec:
        volumes:
        - name: pvc
          persistentVolumeClaim:
-           claimName: mongodbpvc     
+           claimName: mongodbpvc
        containers:
        - name: mongodbcontainer
          image: mongo
@@ -103,12 +91,18 @@ spec:
          - containerPort: 27017
          env:
          - name: MONGO_INITDB_ROOT_USERNAME
-           value: admin
+           valueFrom:
+             configMapKeyRef:
+               name: ecommerceconfigmap
+               key: mongousername
          - name: MONGO_INITDB_ROOT_PASSWORD
-           value: admin123
+           valueFrom:
+             configMapKeyRef:
+               name: ecommerceconfigmap
+               key: mongopassword
          volumeMounts:
          - name: pvc
-           mountPath: /data/db   
+           mountPath: /data/db
 ---
 apiVersion: v1
 kind: Service
@@ -121,23 +115,47 @@ spec:
   ports:
   - port: 27017
     targetPort: 27017
- ---
- apiVersion: autoscaling/v2beta1
- kind: HorizontalPodAutoscaler
- # The HPA autoscales the pod when the average CPU utilization gets to 70%
- # The HPA will the information of the CPU  utilization when Metric server is configured in the server.
- # The HPA scales the deployment with the tag springappdeployment
- metadata:
-   name: springappdeployment
- spec:
-   scaleTargetRef:
-     apiVersion: apps/v1
-     kind: Deployment
-   miniReplicas: 2
-   maxreplicas: 10
-   metrics:
-     - resource:
-         name: cpu
-         targetAverageUtilization: 70
-       type: Resource
- 
+=====================================================================================================================================================
+# Dockerfile used to build the image for the containerization of the ecommerce application
+FROM openjdk:8-alpine
+# Required for starting application up.
+RUN apk update && apk add /bin/sh
+RUN mkdir -p /opt/app
+ENV PROJECT_HOME /opt/app
+COPY target/spring-boot-mongo-1.0.jar $PROJECT_HOME/spring-boot-mongo.jar
+WORKDIR $PROJECT_HOME
+EXPOSE 8080
+CMD ["java" ,"-jar","./spring-boot-mongo.jar"]
+
+=========================================================================================================================================================
+# Jenkins pipeline-as-code for application deployment
+node{
+	def mavenHome = tool name: "maven3.8.6"
+	stage('CloneCode'){
+	git 'https://github.com/Kalagbor/maven-web-app-mit'
+	}
+	stage('Test&Build'){
+	sh "${mavenHome}/bin/mvn clean package"
+	}
+	stage('CodeQualityAnalysis'){
+	//sh "${mavenHome}/bin/mvn sonar:sonar"
+	}
+	stage('UploadtoArtifactory'){
+	//sh "${mavenHome}/bin/mvn deploy"
+	}
+	stage('DockerBuild'){
+	sh "sudo docker build -t kalaski/ecommerce ." 
+	}
+	stage('6DockerPushtoDHR'){
+	withCredentials([string(credentialsId: 'DockerHubCredential', variable: 'DockerHubCredential')]) {
+    sh "sudo docker login -u kalaski -p ${DockerHubCredential}"  }
+    sh "sudo docker push kalaski/mavenmit"
+	}
+	stage('7DeleteImage'){
+    sh "docker rmi $(docker image -q)"
+	}
+	stage('DeployEcommerceApptoK8s'){
+    sh "kubectl apply -f springapp.yml"
+	}
+}
+
