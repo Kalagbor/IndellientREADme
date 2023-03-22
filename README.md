@@ -1,6 +1,7 @@
 # IndellientREADme
 ## K8s manifest file, Dockerfile and Jenkins pipeline-as-code for a sample spring-book application deployment with mongoDB.
-# ConfigMap for ecommerceapp
+### ConfigMap for ecommerceapp
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,7 +11,7 @@ data:
   mongopassword: devdb@123
 
 ---
-# Deployment for mongoDB app
+# Deployment for ecomerceapp
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -55,6 +56,7 @@ spec:
     targetPort: 8080
   type: LoadBalancer
 ---
+# Mongodb PVC for data storage
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -66,6 +68,7 @@ spec:
     requests:
       storage: 1Gi
 ---
+# Mongodb ReplicaSet
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
@@ -104,6 +107,7 @@ spec:
          - name: pvc
            mountPath: /data/db
 ---
+# ClusterIP service for mongodb
 apiVersion: v1
 kind: Service
 metadata:
