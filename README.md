@@ -133,6 +133,7 @@ spec:
  apiVersion: autoscaling/v2beta1
  kind: HorizontalPodAutoscaler
  # The HPA autoscales the pod when the average CPU utilization gets to 70%
+ # The HPA will the information of the CPU  utilization when Metric server is configured in the server.
  # The HPA scales the deployment with the tag springappdeployment
  metadata:
    name: springappdeployment
