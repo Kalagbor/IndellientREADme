@@ -6,8 +6,8 @@ kind: ConfigMap
 metadata: 
   name: springappconfigmap
 data: 
-  mongousername: adminuser
-  mongopassword: adminuser123
+  mongousername: admin
+  mongopassword: admin123
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -53,14 +53,6 @@ spec:
           limits:
             cpu: 200m
             memory: 1Gi
-        livenessProbe:
-          httpGet:
-            path: /spring-boot-app
-            port: 8080
-        readinessProbe:
-          httpGet:
-            path: /spring-boot-app
-            port: 8080
             
 ---
 apiVersion: v1
@@ -111,9 +103,9 @@ spec:
          - containerPort: 27017
          env:
          - name: MONGO_INITDB_ROOT_USERNAME
-           value: devdb
+           value: admin
          - name: MONGO_INITDB_ROOT_PASSWORD
-           value: devdb@123
+           value: admin123
          volumeMounts:
          - name: pvc
            mountPath: /data/db   
